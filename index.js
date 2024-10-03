@@ -45,8 +45,10 @@ const uploadFileToS3 = async (filePath, fileHash) => {
   try {
     await s3Client.send(command);
     console.log(`Uploaded: ${fileKey} with MD5 checksum: ${checksumMD5}`);
+    return true;
   } catch (error) {
     console.error(`Failed to upload ${fileKey}:`, error);
+    return false;
   }
 };
 
@@ -79,7 +81,12 @@ const backupFolder = async (dirPath) => {
         existingFile.hash !== currentHash // Compare the hash
       ) {
         // File is new or modified, upload it to S3 with MD5 checksum
-        await uploadFileToS3(filePath, currentHash);
+        const result = await uploadFileToS3(filePath, currentHash);
+
+        if (!result) {
+          console.error(`Stopping all operations due to error while uploading ${file}.`);
+          return; // This will stop further processing in this call and any recursive calls.
+      }
 
         // Upsert the file information in PostgreSQL, including the hash
         await prisma.file.upsert({
