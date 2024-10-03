@@ -1,0 +1,20 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model File {
+  id           Int      @id @default(autoincrement())
+  path         String   @unique
+  size         Int
+  lastModified DateTime
+  hash         String   // The file hash (SHA-256 or others, used for checking local changes)
+  checksum     String?  // S3 checksum (MD5 or other), optional because not all files may have it
+  uploaded     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
