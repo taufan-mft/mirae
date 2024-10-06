@@ -1,7 +1,7 @@
 const { S3Client, PutObjectCommand, StorageClass } = require('@aws-sdk/client-s3');
 const fs = require('fs-extra');
 const path = require('path');
-const crypto = require('crypto'); // For hash generation and checksum calculation
+const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
@@ -9,10 +9,8 @@ const s3Client = new S3Client({
   region: process.env.AWS_REGION
 });
 
-// Absolute path to the root folder you want to backup
 const rootFolder = path.resolve(process.env.ROOT_FOLDER);
 
-// Function to calculate MD5 checksum (or any other algorithm)
 const calculateFileMD5 = async (filePath) => {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('md5'); // Use md5 for S3 checksum
@@ -23,21 +21,19 @@ const calculateFileMD5 = async (filePath) => {
   });
 };
 
-// Function to upload a file to S3 using AWS SDK v3 with checksum verification
 const uploadFileToS3 = async (filePath, fileHash) => {
   const fileKey = path.relative(rootFolder, filePath);
   const fileStream = fs.createReadStream(filePath);
 
-  // Calculate MD5 checksum for S3 upload
   const checksumMD5 = await calculateFileMD5(filePath);
 
   const command = new PutObjectCommand({
     Bucket: process.env.S3_BUCKET_NAME,
     Key: fileKey,
     Body: fileStream,
-    ContentMD5: checksumMD5, // Add MD5 checksum for verification
+    ContentMD5: checksumMD5, 
     Metadata: {
-      'file-hash': fileHash // Optionally store a custom hash (SHA-256) as metadata
+      'file-hash': fileHash
     },
     StorageClass: StorageClass.GLACIER
   });
@@ -52,7 +48,6 @@ const uploadFileToS3 = async (filePath, fileHash) => {
   }
 };
 
-// Function to recursively backup folder
 const backupFolder = async (dirPath) => {
   const files = await fs.readdir(dirPath);
 
@@ -61,15 +56,11 @@ const backupFolder = async (dirPath) => {
     const stats = await fs.stat(filePath);
 
     if (stats.isDirectory()) {
-      await backupFolder(filePath); // Recursive call for directories
+      await backupFolder(filePath);
     } else {
       const lastModified = new Date(stats.mtime);
       const size = stats.size;
-
-      // Calculate current file hash (SHA-256)
       const currentHash = await calculateFileMD5(filePath); // Change to MD5 for S3 checksum
-
-      // Check the file in the database
       const existingFile = await prisma.file.findUnique({
         where: { path: filePath }
       });
@@ -85,10 +76,9 @@ const backupFolder = async (dirPath) => {
 
         if (!result) {
           console.error(`Stopping all operations due to error while uploading ${file}.`);
-          return; // This will stop further processing in this call and any recursive calls.
+          return;
       }
 
-        // Upsert the file information in PostgreSQL, including the hash
         await prisma.file.upsert({
           where: { path: filePath },
           update: { size, lastModified, hash: currentHash, uploaded: true },
